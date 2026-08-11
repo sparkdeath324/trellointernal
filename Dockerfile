@@ -1,8 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # Multi-stage build producing a small runtime image from Next's standalone
-# output. Alpine is safe here: better-sqlite3 ships a linuxmusl-x64 prebuild,
-# so no native compilation happens at runtime.
+# output.
+#
+# This is the self-hosting path (Dokploy, Coolify, plain Docker). It runs the
+# app against a SQLite file on a mounted volume. The Vercel deployment instead
+# sets TURSO_DATABASE_URL and needs none of this — see the README.
 
 FROM node:22-alpine AS base
 WORKDIR /app
@@ -11,10 +14,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 
 # --- dependencies ----------------------------------------------------------
-# Build toolchain is present only in this stage, as insurance in case a native
-# dependency has to compile from source. It never reaches the runtime image.
 FROM base AS deps
-RUN apk add --no-cache python3 make g++
 COPY package.json package-lock.json ./
 RUN npm ci
 

@@ -1,94 +1,148 @@
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
+import { createClient, type Client } from "@libsql/client";
 
 /**
- * SQLite connection, schema bootstrap and first-run seed.
+ * libSQL connection, schema bootstrap and row helpers.
  *
- * The handle is cached on `globalThis` so Next's dev-server hot reloads reuse
- * one connection instead of opening a new file handle per module evaluation.
+ * One code path serves both environments:
+ *   - Production (Vercel): TURSO_DATABASE_URL points at a Turso database over
+ *     the network. Serverless instances have no durable filesystem, so the
+ *     database has to live outside the function.
+ *   - Local dev and containers: no TURSO_DATABASE_URL, so we open a plain
+ *     SQLite file. Same SQL, same client, no branching in the query layer.
+ *
+ * The client and its migration run are memoised on `globalThis` so a warm
+ * serverless instance (and Next's dev-server hot reload) reuses them instead of
+ * re-running CREATE TABLE on every request.
  */
 
-const DB_PATH =
-  process.env.CRM_DB_PATH ?? path.join(process.cwd(), "data", "crm.db");
+const SCHEMA = `
+  CREATE TABLE IF NOT EXISTS boards (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    currency    TEXT NOT NULL DEFAULT 'USD',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
 
-type Conn = InstanceType<typeof Database>;
+  CREATE TABLE IF NOT EXISTS stages (
+    id                  TEXT PRIMARY KEY,
+    board_id            TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    name                TEXT NOT NULL,
+    position            INTEGER NOT NULL,
+    default_probability INTEGER NOT NULL DEFAULT 0,
+    outcome             TEXT NOT NULL DEFAULT 'open',
+    wip_limit           INTEGER,
+    color               TEXT NOT NULL DEFAULT 'ash',
+    created_at          TEXT NOT NULL
+  );
 
-const globalForDb = globalThis as unknown as { __crmDb?: Conn };
+  CREATE TABLE IF NOT EXISTS deals (
+    id                  TEXT PRIMARY KEY,
+    board_id            TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    stage_id            TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
+    position            INTEGER NOT NULL,
+    title               TEXT NOT NULL,
+    company             TEXT NOT NULL DEFAULT '',
+    contact_name        TEXT NOT NULL DEFAULT '',
+    contact_email       TEXT NOT NULL DEFAULT '',
+    contact_phone       TEXT NOT NULL DEFAULT '',
+    value_cents         INTEGER NOT NULL DEFAULT 0,
+    currency            TEXT NOT NULL DEFAULT 'USD',
+    source              TEXT NOT NULL DEFAULT 'other',
+    priority            TEXT NOT NULL DEFAULT 'medium',
+    probability         INTEGER NOT NULL DEFAULT 0,
+    expected_close_date TEXT,
+    owner               TEXT NOT NULL DEFAULT '',
+    tags                TEXT NOT NULL DEFAULT '[]',
+    notes               TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+  );
 
-function migrate(db: Conn) {
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  CREATE TABLE IF NOT EXISTS activities (
+    id         TEXT PRIMARY KEY,
+    deal_id    TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    actor      TEXT NOT NULL DEFAULT 'You',
+    created_at TEXT NOT NULL
+  );
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS boards (
-      id          TEXT PRIMARY KEY,
-      name        TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      currency    TEXT NOT NULL DEFAULT 'USD',
-      created_at  TEXT NOT NULL,
-      updated_at  TEXT NOT NULL
-    );
+  CREATE INDEX IF NOT EXISTS idx_stages_board ON stages(board_id, position);
+  CREATE INDEX IF NOT EXISTS idx_deals_stage  ON deals(stage_id, position);
+  CREATE INDEX IF NOT EXISTS idx_deals_board  ON deals(board_id);
+  CREATE INDEX IF NOT EXISTS idx_activities_deal ON activities(deal_id, created_at);
+`;
 
-    CREATE TABLE IF NOT EXISTS stages (
-      id                  TEXT PRIMARY KEY,
-      board_id            TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-      name                TEXT NOT NULL,
-      position            INTEGER NOT NULL,
-      default_probability INTEGER NOT NULL DEFAULT 0,
-      outcome             TEXT NOT NULL DEFAULT 'open',
-      wip_limit           INTEGER,
-      color               TEXT NOT NULL DEFAULT 'slate',
-      created_at          TEXT NOT NULL
-    );
+function clientConfig() {
+  const url = process.env.TURSO_DATABASE_URL?.trim();
+  if (url) {
+    return { url, authToken: process.env.TURSO_AUTH_TOKEN?.trim() };
+  }
 
-    CREATE TABLE IF NOT EXISTS deals (
-      id                  TEXT PRIMARY KEY,
-      board_id            TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
-      stage_id            TEXT NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
-      position            INTEGER NOT NULL,
-      title               TEXT NOT NULL,
-      company             TEXT NOT NULL DEFAULT '',
-      contact_name        TEXT NOT NULL DEFAULT '',
-      contact_email       TEXT NOT NULL DEFAULT '',
-      contact_phone       TEXT NOT NULL DEFAULT '',
-      value_cents         INTEGER NOT NULL DEFAULT 0,
-      currency            TEXT NOT NULL DEFAULT 'USD',
-      source              TEXT NOT NULL DEFAULT 'other',
-      priority            TEXT NOT NULL DEFAULT 'medium',
-      probability         INTEGER NOT NULL DEFAULT 0,
-      expected_close_date TEXT,
-      owner               TEXT NOT NULL DEFAULT '',
-      tags                TEXT NOT NULL DEFAULT '[]',
-      notes               TEXT NOT NULL DEFAULT '',
-      created_at          TEXT NOT NULL,
-      updated_at          TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS activities (
-      id         TEXT PRIMARY KEY,
-      deal_id    TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
-      kind       TEXT NOT NULL,
-      message    TEXT NOT NULL,
-      actor      TEXT NOT NULL DEFAULT 'You',
-      created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_stages_board ON stages(board_id, position);
-    CREATE INDEX IF NOT EXISTS idx_deals_stage  ON deals(stage_id, position);
-    CREATE INDEX IF NOT EXISTS idx_deals_board  ON deals(board_id);
-    CREATE INDEX IF NOT EXISTS idx_activities_deal ON activities(deal_id, created_at);
-  `);
+  const file =
+    process.env.CRM_DB_PATH ?? path.join(process.cwd(), "data", "crm.db");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  return { url: `file:${file}` };
 }
 
-export function getDb(): Conn {
-  if (globalForDb.__crmDb) return globalForDb.__crmDb;
+const globalForDb = globalThis as unknown as { __crmDb?: Promise<Client> };
 
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  const db = new Database(DB_PATH);
-  migrate(db);
-  globalForDb.__crmDb = db;
-  return db;
+/**
+ * Lock contention is normal here, not exceptional: several serverless instances
+ * can cold-start at once and race to bootstrap the schema or write.
+ */
+function isTransientLockError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === "SQLITE_BUSY" || code === "SQLITE_LOCKED") return true;
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("database is locked") || message.includes("busy");
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function withLockRetry<T>(operation: () => Promise<T>, attempts = 5): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isTransientLockError(error)) throw error;
+      lastError = error;
+      // Exponential backoff with jitter, so racing instances don't retry in step.
+      await sleep(40 * 2 ** attempt + Math.random() * 40);
+    }
+  }
+  throw lastError;
+}
+
+async function connect(): Promise<Client> {
+  const config = clientConfig();
+  const client = createClient(config);
+
+  if (config.url.startsWith("file:")) {
+    // Wait for the write lock rather than failing instantly. Turso applies its
+    // own server-side queueing, so this is only needed in file mode.
+    await client.execute("PRAGMA busy_timeout = 5000");
+  }
+
+  await withLockRetry(() => client.executeMultiple(SCHEMA));
+  return client;
+}
+
+export function getDb(): Promise<Client> {
+  if (!globalForDb.__crmDb) {
+    // Clear the memo on failure, otherwise one bad cold start poisons every
+    // later request on this instance with the same rejected promise.
+    globalForDb.__crmDb = connect().catch((error: unknown) => {
+      globalForDb.__crmDb = undefined;
+      throw error;
+    });
+  }
+  return globalForDb.__crmDb;
 }
 
 export function newId(prefix: string): string {
@@ -97,4 +151,55 @@ export function newId(prefix: string): string {
 
 export function nowIso(): string {
   return new Date().toISOString();
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Query helpers                                                              */
+/* -------------------------------------------------------------------------- */
+
+export type SqlArgs = (string | number | null)[];
+
+/** Runs a statement and returns its rows cast to the caller's row shape. */
+export async function all<T>(sql: string, args: SqlArgs = []): Promise<T[]> {
+  const db = await getDb();
+  const result = await db.execute({ sql, args });
+  return result.rows as unknown as T[];
+}
+
+export async function one<T>(sql: string, args: SqlArgs = []): Promise<T | null> {
+  const rows = await all<T>(sql, args);
+  return rows[0] ?? null;
+}
+
+export async function run(sql: string, args: SqlArgs = []): Promise<void> {
+  const db = await getDb();
+  await db.execute({ sql, args });
+}
+
+/**
+ * Runs `body` inside a write transaction, rolling back on any error.
+ *
+ * Interactive transactions matter here: `moveDeal` and `deleteStage` read rows,
+ * compute new positions in JS, then write them back — that read has to see the
+ * same snapshot the write commits against.
+ */
+export async function writeTransaction<T>(
+  body: (tx: Awaited<ReturnType<Client["transaction"]>>) => Promise<T>,
+): Promise<T> {
+  const db = await getDb();
+
+  // Safe to retry: every caller re-reads the rows it needs inside the
+  // transaction, so a replayed body recomputes against the current state
+  // rather than reusing a stale snapshot.
+  return withLockRetry(async () => {
+    const tx = await db.transaction("write");
+    try {
+      const result = await body(tx);
+      await tx.commit();
+      return result;
+    } catch (error) {
+      await tx.rollback().catch(() => {});
+      throw error;
+    }
+  });
 }

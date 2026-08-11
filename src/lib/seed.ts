@@ -1,4 +1,4 @@
-import { getDb, newId, nowIso } from "./db";
+import { newId, nowIso, one, writeTransaction } from "./db";
 import type { DealPriority, DealSource, StageColor, StageOutcome } from "./types";
 
 /**
@@ -231,63 +231,66 @@ function isoDateIn(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function seedIfEmpty(): void {
-  const db = getDb();
-  const { count } = db.prepare("SELECT COUNT(*) AS count FROM boards").get() as {
-    count: number;
-  };
-  if (count > 0) return;
+/**
+ * Once this instance has confirmed the database is populated there is no point
+ * asking again on every request — each check is a network round trip to Turso.
+ */
+let seedChecked = false;
+
+export async function seedIfEmpty(): Promise<void> {
+  if (seedChecked) return;
+
+  const existing = await one<{ count: number }>("SELECT COUNT(*) AS count FROM boards");
+  if (Number(existing?.count ?? 0) > 0) {
+    seedChecked = true;
+    return;
+  }
 
   const ts = nowIso();
   const boardId = newId("brd");
 
-  const insertBoard = db.prepare(
-    `INSERT INTO boards (id, name, description, currency, created_at, updated_at)
-     VALUES (@id, @name, @description, @currency, @createdAt, @updatedAt)`,
-  );
-  const insertStage = db.prepare(
-    `INSERT INTO stages (id, board_id, name, position, default_probability, outcome, wip_limit, color, created_at)
-     VALUES (@id, @boardId, @name, @position, @defaultProbability, @outcome, @wipLimit, @color, @createdAt)`,
-  );
-  const insertDeal = db.prepare(
-    `INSERT INTO deals (id, board_id, stage_id, position, title, company, contact_name, contact_email,
-                        contact_phone, value_cents, currency, source, priority, probability,
-                        expected_close_date, owner, tags, notes, created_at, updated_at)
-     VALUES (@id, @boardId, @stageId, @position, @title, @company, @contactName, @contactEmail,
-             @contactPhone, @valueCents, @currency, @source, @priority, @probability,
-             @expectedCloseDate, @owner, @tags, @notes, @createdAt, @updatedAt)`,
-  );
-  const insertActivity = db.prepare(
-    `INSERT INTO activities (id, deal_id, kind, message, actor, created_at)
-     VALUES (@id, @dealId, @kind, @message, @actor, @createdAt)`,
-  );
+  await writeTransaction(async (tx) => {
+    // Re-check inside the write transaction: several serverless instances can
+    // cold-start at once, and without this they would each seed a board.
+    const guard = await tx.execute("SELECT COUNT(*) AS count FROM boards");
+    const count = Number(
+      (guard.rows[0] as unknown as { count: number } | undefined)?.count ?? 0,
+    );
+    if (count > 0) return;
 
-  db.transaction(() => {
-    insertBoard.run({
-      id: boardId,
-      name: "Sales Pipeline",
-      description: "New business — FY pipeline across all regions",
-      currency: "USD",
-      createdAt: ts,
-      updatedAt: ts,
+    await tx.execute({
+      sql: `INSERT INTO boards (id, name, description, currency, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [
+        boardId,
+        "Sales Pipeline",
+        "New business — FY pipeline across all regions",
+        "USD",
+        ts,
+        ts,
+      ],
     });
 
     const stageIds = new Map<string, string>();
-    STAGE_SEEDS.forEach((stage, index) => {
+    for (const [index, stage] of STAGE_SEEDS.entries()) {
       const id = newId("stg");
       stageIds.set(stage.name, id);
-      insertStage.run({
-        id,
-        boardId,
-        name: stage.name,
-        position: index,
-        defaultProbability: stage.probability,
-        outcome: stage.outcome,
-        wipLimit: stage.wipLimit,
-        color: stage.color,
-        createdAt: ts,
+      await tx.execute({
+        sql: `INSERT INTO stages (id, board_id, name, position, default_probability, outcome, wip_limit, color, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          id,
+          boardId,
+          stage.name,
+          index,
+          stage.probability,
+          stage.outcome,
+          stage.wipLimit,
+          stage.color,
+          ts,
+        ],
       });
-    });
+    }
 
     const positionByStage = new Map<string, number>();
     for (const deal of DEAL_SEEDS) {
@@ -299,37 +302,49 @@ export function seedIfEmpty(): void {
       const stageSeed = STAGE_SEEDS.find((s) => s.name === deal.stage)!;
       const dealId = newId("dl");
 
-      insertDeal.run({
-        id: dealId,
-        boardId,
-        stageId,
-        position,
-        title: deal.title,
-        company: deal.company,
-        contactName: deal.contactName,
-        contactEmail: deal.contactEmail,
-        contactPhone: deal.contactPhone,
-        valueCents: Math.round(deal.value * 100),
-        currency: "USD",
-        source: deal.source,
-        priority: deal.priority,
-        probability: stageSeed.probability,
-        expectedCloseDate: isoDateIn(deal.closeInDays),
-        owner: deal.owner,
-        tags: JSON.stringify(deal.tags),
-        notes: deal.notes,
-        createdAt: ts,
-        updatedAt: ts,
+      await tx.execute({
+        sql: `INSERT INTO deals (id, board_id, stage_id, position, title, company, contact_name, contact_email,
+                                 contact_phone, value_cents, currency, source, priority, probability,
+                                 expected_close_date, owner, tags, notes, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          dealId,
+          boardId,
+          stageId,
+          position,
+          deal.title,
+          deal.company,
+          deal.contactName,
+          deal.contactEmail,
+          deal.contactPhone,
+          Math.round(deal.value * 100),
+          "USD",
+          deal.source,
+          deal.priority,
+          stageSeed.probability,
+          isoDateIn(deal.closeInDays),
+          deal.owner,
+          JSON.stringify(deal.tags),
+          deal.notes,
+          ts,
+          ts,
+        ],
       });
 
-      insertActivity.run({
-        id: newId("act"),
-        dealId,
-        kind: "created",
-        message: `Deal created in ${deal.stage}`,
-        actor: deal.owner,
-        createdAt: ts,
+      await tx.execute({
+        sql: `INSERT INTO activities (id, deal_id, kind, message, actor, created_at)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          newId("act"),
+          dealId,
+          "created",
+          `Deal created in ${deal.stage}`,
+          deal.owner,
+          ts,
+        ],
       });
     }
-  })();
+  });
+
+  seedChecked = true;
 }

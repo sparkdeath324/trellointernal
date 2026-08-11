@@ -8,14 +8,16 @@ import { formatMoneyCompact } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function BoardsPage() {
-  const boards = listBoards();
-  const summaries = boards.map((board) => {
-    const snapshot = getBoardSnapshot(board.id);
-    const metrics = snapshot
-      ? pipelineMetrics(snapshot.stages, snapshot.deals)
-      : null;
-    return { board, metrics, stageCount: snapshot?.stages.length ?? 0 };
-  });
+  const boards = await listBoards();
+  const summaries = await Promise.all(
+    boards.map(async (board) => {
+      const snapshot = await getBoardSnapshot(board.id);
+      const metrics = snapshot
+        ? pipelineMetrics(snapshot.stages, snapshot.deals)
+        : null;
+      return { board, metrics, stageCount: snapshot?.stages.length ?? 0 };
+    }),
+  );
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-14">

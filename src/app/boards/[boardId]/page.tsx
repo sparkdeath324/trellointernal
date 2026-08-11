@@ -11,14 +11,16 @@ export default async function BoardPage({
   params: Promise<{ boardId: string }>;
 }) {
   const { boardId } = await params;
-  const snapshot = getBoardSnapshot(boardId);
+  const snapshot = await getBoardSnapshot(boardId);
   if (!snapshot) notFound();
+
+  const [boards, owners] = await Promise.all([listBoards(), listOwners(boardId)]);
 
   return (
     <BoardView
       snapshot={snapshot}
-      boards={listBoards().map(({ id, name }) => ({ id, name }))}
-      owners={listOwners(boardId)}
+      boards={boards.map(({ id, name }) => ({ id, name }))}
+      owners={owners}
     />
   );
 }

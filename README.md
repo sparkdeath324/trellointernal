@@ -11,9 +11,9 @@ npm install
 npm run dev          # http://localhost:3000
 ```
 
-The SQLite database is created at `data/crm.db` on first request and seeded with
-a demo pipeline (7 stages, 12 deals) so the board is never empty. Run
-`npm run db:reset` to wipe it and re-seed.
+With no `TURSO_DATABASE_URL` set, the app opens a plain SQLite file at
+`data/crm.db`, creating and seeding it on first request (7 stages, 12 deals) so
+the board is never empty. `npm run db:reset` wipes it and re-seeds.
 
 ## What it does
 
@@ -98,7 +98,7 @@ formatted string alongside; cents stay an internal detail.
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS v4 |
 | Drag & drop | `@dnd-kit` |
-| Storage | SQLite via `better-sqlite3` |
+| Storage | libSQL — Turso in production, a local SQLite file in dev |
 | Validation | `zod` at the server-action and MCP tool boundaries |
 | Agent API | `@modelcontextprotocol/sdk` over stdio |
 
@@ -119,7 +119,7 @@ src/
     PipelineHeader.tsx          KPI tiles + filter bar
     ui.tsx                      shared inputs, buttons, modal
   lib/
-    db.ts        connection, schema, migrations
+    db.ts        libSQL client, schema, lock-retry helpers
     seed.ts      first-run demo pipeline
     queries.ts   all SQL, row → domain mapping
     metrics.ts   pipeline roll-ups (pure)
@@ -145,14 +145,70 @@ chain. Money is stored as integer cents throughout and only formatted at the
 edges. Card order is a dense `position` sequence per stage, rewritten inside a
 transaction on every move.
 
+## Deployment
+
+### Vercel (recommended)
+
+Vercel functions have no durable filesystem — only `/tmp`, which is per-instance
+and wiped between invocations — so the database has to live outside the
+deployment. Turso is a hosted libSQL service speaking the same SQL as SQLite,
+which is why the query layer is unchanged between local and production.
+
+**1. Create the database** ([turso.tech](https://turso.tech), free tier):
+
+```bash
+turso db create pipeline-crm
+turso db show pipeline-crm --url      # libsql://pipeline-crm-<org>.turso.io
+turso db tokens create pipeline-crm   # the auth token
+```
+
+**2. Import the project on Vercel** — "Add New… → Project", pick this repo.
+Framework preset, build command and output directory are all detected; nothing
+to change.
+
+**3. Set two environment variables** before the first deploy (Settings →
+Environment Variables), for Production, Preview and Development:
+
+| Name | Value |
+| --- | --- |
+| `TURSO_DATABASE_URL` | the `libsql://…` URL from step 1 |
+| `TURSO_AUTH_TOKEN` | the token from step 1 |
+
+**4. Deploy.** The schema is created on the first request and the demo pipeline
+is seeded once — the seed re-checks inside its write transaction, so several
+instances cold-starting together still produce exactly one board.
+
+If you add the variables *after* a failed deploy, redeploy — Vercel bakes env
+vars in at build time.
+
+Note that preview deployments share the production database unless you point
+them at a separate Turso database.
+
+### Self-hosting (Docker / Dokploy / Coolify)
+
+The `Dockerfile` and `docker-compose.yml` run the app against a SQLite file on a
+mounted volume — no Turso needed:
+
+```bash
+docker compose up -d --build        # http://localhost:3000
+```
+
+The image builds from Next's standalone output, runs as a non-root user, keeps
+the database on the `crm-data` volume at `/app/data`, and exposes `/api/health`
+for the platform's health check. In Dokploy, point a Compose application at this
+repo; it picks up the compose file and health check as-is.
+
 ## Notes
 
-- `data/` is gitignored — the database is local to each checkout.
-- `better-sqlite3` is a native addon and is listed in `serverExternalPackages`
-  so Next keeps it out of the server bundle.
+- `data/` is gitignored — the local database is per-checkout.
+- The MCP server talks to whichever database the env vars select, so it can
+  drive either a local file or the production Turso database.
 - Compact money formatting is hand-rolled rather than using `Intl`'s
   `notation: "compact"`, whose trailing-zero behaviour differs between Node and
   the browser and caused a hydration mismatch.
+- Deletes remove child rows explicitly instead of relying on
+  `ON DELETE CASCADE`, which only fires when `PRAGMA foreign_keys` is on — not
+  guaranteed across libSQL deployments.
 
 ## Scripts
 

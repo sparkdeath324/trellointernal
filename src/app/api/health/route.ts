@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    getDb().prepare("SELECT 1 AS ok").get();
+    const db = await getDb();
+    await db.execute("SELECT 1 AS ok");
     return NextResponse.json({ status: "ok", database: "reachable" });
   } catch (error) {
     return NextResponse.json(

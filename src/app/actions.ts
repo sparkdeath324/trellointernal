@@ -88,7 +88,7 @@ export async function createDealAction(input: {
 }): Promise<ActionResult> {
   try {
     const fields = dealFieldsSchema.parse(input.fields);
-    db.createDeal({ ...fields, boardId: input.boardId, stageId: input.stageId });
+    await db.createDeal({ ...fields, boardId: input.boardId, stageId: input.stageId });
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -103,7 +103,7 @@ export async function updateDealAction(input: {
 }): Promise<ActionResult> {
   try {
     const fields = dealFieldsSchema.parse(input.fields);
-    db.updateDeal(input.dealId, fields);
+    await db.updateDeal(input.dealId, fields);
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -116,7 +116,7 @@ export async function deleteDealAction(input: {
   dealId: string;
 }): Promise<ActionResult> {
   try {
-    db.deleteDeal(input.dealId);
+    await db.deleteDeal(input.dealId);
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -132,7 +132,7 @@ export async function moveDealAction(input: {
 }): Promise<ActionResult> {
   try {
     const index = z.number().int().min(0).parse(input.toIndex);
-    db.moveDeal(input.dealId, input.toStageId, index);
+    await db.moveDeal(input.dealId, input.toStageId, index);
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -148,7 +148,7 @@ export async function addNoteAction(input: {
 }): Promise<ActionResult> {
   try {
     const message = z.string().trim().min(1, "Write something first").max(2000).parse(input.message);
-    db.addNote(input.dealId, message, input.actor);
+    await db.addNote(input.dealId, message, input.actor);
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -176,7 +176,7 @@ export async function createStageAction(input: {
 }): Promise<ActionResult> {
   try {
     const fields = stageFieldsSchema.parse(input.fields);
-    db.createStage({ ...fields, boardId: input.boardId });
+    await db.createStage({ ...fields, boardId: input.boardId });
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -191,7 +191,7 @@ export async function updateStageAction(input: {
 }): Promise<ActionResult> {
   try {
     const fields = stageFieldsSchema.parse(input.fields);
-    db.updateStage(input.stageId, fields);
+    await db.updateStage(input.stageId, fields);
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -205,7 +205,7 @@ export async function deleteStageAction(input: {
   moveDealsTo?: string;
 }): Promise<ActionResult> {
   try {
-    db.deleteStage(input.stageId, input.moveDealsTo);
+    await db.deleteStage(input.stageId, input.moveDealsTo);
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -218,7 +218,7 @@ export async function reorderStagesAction(input: {
   orderedStageIds: string[];
 }): Promise<ActionResult> {
   try {
-    db.reorderStages(input.boardId, input.orderedStageIds);
+    await db.reorderStages(input.boardId, input.orderedStageIds);
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -231,7 +231,7 @@ export async function reorderStagesAction(input: {
 export async function createBoardAction(formData: FormData): Promise<void> {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
-  const board = db.createBoard({
+  const board = await db.createBoard({
     name,
     description: String(formData.get("description") ?? "").trim(),
     currency: String(formData.get("currency") ?? "USD").trim() || "USD",
@@ -254,7 +254,7 @@ export async function updateBoardAction(input: {
         currency: z.string().trim().length(3),
       })
       .parse(input);
-    db.updateBoard(input.boardId, parsed);
+    await db.updateBoard(input.boardId, parsed);
     revalidateBoard(input.boardId);
     return { ok: true };
   } catch (error) {
@@ -263,7 +263,7 @@ export async function updateBoardAction(input: {
 }
 
 export async function deleteBoardAction(boardId: string): Promise<void> {
-  db.deleteBoard(boardId);
+  await db.deleteBoard(boardId);
   revalidatePath("/");
   redirect("/");
 }

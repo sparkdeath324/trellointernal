@@ -101,8 +101,9 @@ server.registerTool(
       "List every pipeline board with its headline numbers (open pipeline, weighted forecast, closed won). Start here to find a boardId.",
   },
   async () => {
-    const boards = db.listBoards().map((board) => {
-      const snapshot = db.getBoardSnapshot(board.id);
+    const boards = await Promise.all(
+      (await db.listBoards()).map(async (board) => {
+      const snapshot = await db.getBoardSnapshot(board.id);
       const metrics = snapshot
         ? pipelineMetrics(snapshot.stages, snapshot.deals)
         : null;
@@ -119,7 +120,8 @@ server.registerTool(
           : null,
         closedWon: metrics ? money(metrics.wonValueCents, board.currency) : null,
       };
-    });
+      }),
+    );
     return json(boards);
   },
 );
@@ -139,7 +141,7 @@ server.registerTool(
     },
   },
   async ({ boardId, includeDeals }) => {
-    const snapshot = db.getBoardSnapshot(boardId);
+    const snapshot = await db.getBoardSnapshot(boardId);
     if (!snapshot) return fail(`No board with id ${boardId}`);
 
     const { board, stages, deals } = snapshot;
@@ -173,8 +175,8 @@ server.registerTool(
     },
   },
   async ({ name, description, currency }) => {
-    const board = db.createBoard({ name, description, currency });
-    return json({ board, stages: db.getBoardSnapshot(board.id)?.stages ?? [] });
+    const board = await db.createBoard({ name, description, currency });
+    return json({ board, stages: (await db.getBoardSnapshot(board.id))?.stages ?? [] });
   },
 );
 
@@ -202,8 +204,8 @@ server.registerTool(
     },
   },
   async ({ boardId, ...fields }) => {
-    if (!db.getBoardSnapshot(boardId)) return fail(`No board with id ${boardId}`);
-    return json(db.createStage({ boardId, ...fields }));
+    if (!(await db.getBoardSnapshot(boardId))) return fail(`No board with id ${boardId}`);
+    return json(await db.createStage({ boardId, ...fields }));
   },
 );
 
@@ -222,9 +224,9 @@ server.registerTool(
     },
   },
   async ({ stageId, ...fields }) => {
-    if (!db.getStage(stageId)) return fail(`No stage with id ${stageId}`);
-    db.updateStage(stageId, fields);
-    return json(db.getStage(stageId));
+    if (!(await db.getStage(stageId))) return fail(`No stage with id ${stageId}`);
+    await db.updateStage(stageId, fields);
+    return json(await db.getStage(stageId));
   },
 );
 
@@ -240,12 +242,12 @@ server.registerTool(
     },
   },
   async ({ stageId, moveDealsTo }) => {
-    const stage = db.getStage(stageId);
+    const stage = await db.getStage(stageId);
     if (!stage) return fail(`No stage with id ${stageId}`);
-    if (moveDealsTo && !db.getStage(moveDealsTo)) {
+    if (moveDealsTo && !(await db.getStage(moveDealsTo))) {
       return fail(`No stage with id ${moveDealsTo} to move deals into`);
     }
-    db.deleteStage(stageId, moveDealsTo);
+    await db.deleteStage(stageId, moveDealsTo);
     return json({ deleted: stageId, dealsMovedTo: moveDealsTo ?? null });
   },
 );
@@ -261,7 +263,7 @@ server.registerTool(
     },
   },
   async ({ boardId, orderedStageIds }) => {
-    const snapshot = db.getBoardSnapshot(boardId);
+    const snapshot = await db.getBoardSnapshot(boardId);
     if (!snapshot) return fail(`No board with id ${boardId}`);
 
     const known = new Set(snapshot.stages.map((s) => s.id));
@@ -273,8 +275,8 @@ server.registerTool(
       );
     }
 
-    db.reorderStages(boardId, orderedStageIds);
-    return json(db.getBoardSnapshot(boardId)?.stages ?? []);
+    await db.reorderStages(boardId, orderedStageIds);
+    return json((await db.getBoardSnapshot(boardId))?.stages ?? []);
   },
 );
 
@@ -302,7 +304,7 @@ server.registerTool(
     },
   },
   async ({ boardId, stageId, owner, source, priority, query, minValue, maxValue, closingBefore }) => {
-    const snapshot = db.getBoardSnapshot(boardId);
+    const snapshot = await db.getBoardSnapshot(boardId);
     if (!snapshot) return fail(`No board with id ${boardId}`);
 
     const stageOrder = new Map(snapshot.stages.map((s, i) => [s.id, i]));
@@ -361,13 +363,13 @@ server.registerTool(
     inputSchema: { dealId: z.string() },
   },
   async ({ dealId }) => {
-    const deal = db.getDeal(dealId);
+    const deal = await db.getDeal(dealId);
     if (!deal) return fail(`No deal with id ${dealId}`);
-    const stage = db.getStage(deal.stageId);
+    const stage = await db.getStage(deal.stageId);
     return json({
       deal: presentDeal(deal, stage ? [stage] : []),
       stage,
-      activities: db.listActivities(dealId),
+      activities: await db.listActivities(dealId),
     });
   },
 );
@@ -397,12 +399,12 @@ server.registerTool(
     },
   },
   async ({ boardId, stageId, value, probability, ...rest }) => {
-    const snapshot = db.getBoardSnapshot(boardId);
+    const snapshot = await db.getBoardSnapshot(boardId);
     if (!snapshot) return fail(`No board with id ${boardId}`);
     const stage = snapshot.stages.find((s) => s.id === stageId);
     if (!stage) return fail(`Stage ${stageId} is not on board ${boardId}`);
 
-    const deal = db.createDeal({
+    const deal = await db.createDeal({
       ...rest,
       boardId,
       stageId,
@@ -438,10 +440,10 @@ server.registerTool(
     },
   },
   async ({ dealId, value, ...patch }) => {
-    const current = db.getDeal(dealId);
+    const current = await db.getDeal(dealId);
     if (!current) return fail(`No deal with id ${dealId}`);
 
-    db.updateDeal(dealId, {
+    await db.updateDeal(dealId, {
       title: patch.title ?? current.title,
       company: patch.company ?? current.company,
       contactName: patch.contactName ?? current.contactName,
@@ -461,8 +463,8 @@ server.registerTool(
       notes: patch.notes ?? current.notes,
     });
 
-    const updated = db.getDeal(dealId)!;
-    return json(presentDeal(updated, [db.getStage(updated.stageId)!]));
+    const updated = (await db.getDeal(dealId))!;
+    return json(presentDeal(updated, [(await db.getStage(updated.stageId))!]));
   },
 );
 
@@ -484,16 +486,16 @@ server.registerTool(
     },
   },
   async ({ dealId, toStageId, toIndex }) => {
-    const deal = db.getDeal(dealId);
+    const deal = await db.getDeal(dealId);
     if (!deal) return fail(`No deal with id ${dealId}`);
-    const stage = db.getStage(toStageId);
+    const stage = await db.getStage(toStageId);
     if (!stage) return fail(`No stage with id ${toStageId}`);
     if (stage.boardId !== deal.boardId) {
       return fail(`Stage ${toStageId} belongs to a different board`);
     }
 
-    db.moveDeal(dealId, toStageId, toIndex);
-    const moved = db.getDeal(dealId)!;
+    await db.moveDeal(dealId, toStageId, toIndex);
+    const moved = (await db.getDeal(dealId))!;
     return json(presentDeal(moved, [stage]));
   },
 );
@@ -506,9 +508,9 @@ server.registerTool(
     inputSchema: { dealId: z.string() },
   },
   async ({ dealId }) => {
-    const deal = db.getDeal(dealId);
+    const deal = await db.getDeal(dealId);
     if (!deal) return fail(`No deal with id ${dealId}`);
-    db.deleteDeal(dealId);
+    await db.deleteDeal(dealId);
     return json({ deleted: dealId, title: deal.title });
   },
 );
@@ -525,9 +527,9 @@ server.registerTool(
     },
   },
   async ({ dealId, message, actor }) => {
-    if (!db.getDeal(dealId)) return fail(`No deal with id ${dealId}`);
-    db.addNote(dealId, message, actor);
-    return json(db.listActivities(dealId).slice(0, 5));
+    if (!(await db.getDeal(dealId))) return fail(`No deal with id ${dealId}`);
+    await db.addNote(dealId, message, actor);
+    return json((await db.listActivities(dealId)).slice(0, 5));
   },
 );
 
@@ -542,7 +544,7 @@ server.registerTool(
     inputSchema: { boardId: z.string() },
   },
   async ({ boardId }) => {
-    const snapshot = db.getBoardSnapshot(boardId);
+    const snapshot = await db.getBoardSnapshot(boardId);
     if (!snapshot) return fail(`No board with id ${boardId}`);
 
     const { board, stages, deals } = snapshot;
