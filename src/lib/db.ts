@@ -77,10 +77,67 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_activities_deal ON activities(deal_id, created_at);
 `;
 
+/**
+ * Reads an env var, trimming whitespace and stripping a single pair of
+ * surrounding quotes.
+ *
+ * Pasting a value into a dashboard commonly carries quotes along with it, and a
+ * quoted token produces an `Authorization: Bearer "eyJ…"` header that Turso
+ * rejects with a bare `HTTP 400` — not the 401 you would expect from a bad
+ * credential, which makes it look like a protocol fault instead of a typo.
+ */
+function readEnv(name: string): string | undefined {
+  const raw = process.env[name]?.trim();
+  if (!raw) return undefined;
+  const unquoted = raw.replace(/^(['"])([\s\S]*)\1$/, "$2").trim();
+  return unquoted || undefined;
+}
+
+/** Most recent failed HTTP response, used to explain otherwise opaque errors. */
+let lastHttpFailure: { url: string; status: number; body: string } | undefined;
+
+/**
+ * Wraps fetch to retain the response body of failed requests. The libSQL client
+ * discards it and surfaces only "Server returned HTTP status 400", which says
+ * nothing about what the server actually objected to.
+ *
+ * It must not throw: the client probes several endpoints on connect and treats
+ * non-OK responses as ordinary control flow.
+ */
+const diagnosticFetch = async (
+  input: Request | string | URL,
+  init?: RequestInit,
+): Promise<Response> => {
+  const response = await fetch(input as RequestInfo, init);
+  if (!response.ok) {
+    try {
+      const body = (await response.clone().text()).slice(0, 400);
+      const href = input instanceof Request ? input.url : String(input);
+      const { origin, pathname } = new URL(href);
+      lastHttpFailure = { url: `${origin}${pathname}`, status: response.status, body };
+    } catch {
+      // Diagnostics only — never let this interfere with the real request.
+    }
+  }
+  return response;
+};
+
 function clientConfig() {
-  const url = process.env.TURSO_DATABASE_URL?.trim();
+  const url = readEnv("TURSO_DATABASE_URL");
   if (url) {
-    return { url, authToken: process.env.TURSO_AUTH_TOKEN?.trim() };
+    if (!/^(libsql|https?):\/\//.test(url)) {
+      throw new Error(
+        `TURSO_DATABASE_URL must start with libsql:// or https:// — got "${url.slice(0, 24)}…"`,
+      );
+    }
+    return {
+      // A trailing slash makes the client resolve its endpoint paths against a
+      // directory-style base and request the wrong path.
+      url: url.replace(/\/+$/, ""),
+      authToken: readEnv("TURSO_AUTH_TOKEN"),
+      // The client types this as the loose `Function`; keep our own signature.
+      fetch: diagnosticFetch as unknown as (...args: never[]) => unknown,
+    };
   }
 
   const file =
@@ -137,8 +194,18 @@ function describeDbError(error: unknown): string {
   if (error instanceof Error) parts.push(error.message);
   const code = (error as { code?: string } | null)?.code;
   if (code) parts.push(`code=${code}`);
-  const cause = (error as { cause?: unknown } | null)?.cause;
-  if (cause instanceof Error && cause.message) parts.push(`cause=${cause.message}`);
+
+  if (lastHttpFailure) {
+    const { url, status, body } = lastHttpFailure;
+    parts.push(`server responded ${status} to ${url}${body ? ` with: ${body}` : " with an empty body"}`);
+    if (status === 400 || status === 401) {
+      parts.push(
+        "a 400/401 on every request usually means TURSO_AUTH_TOKEN is wrong, expired, " +
+          "or was saved with surrounding quotes — re-issue it with `turso db tokens create <db>`",
+      );
+    }
+  }
+
   return parts.join(" | ") || String(error);
 }
 

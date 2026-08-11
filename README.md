@@ -184,6 +184,13 @@ vars in at build time.
 Note that preview deployments share the production database unless you point
 them at a separate Turso database.
 
+**If the deploy builds but every page 500s** with
+`SERVER_ERROR: Server returned HTTP status 400`, hit `/api/health` — it returns
+Turso's own response body, which the libSQL client otherwise discards. A 400 on
+*every* request (rather than a 401) almost always means the auth token is wrong,
+expired, or was saved with surrounding quotes. Re-issue it with
+`turso db tokens create <db>` and paste the bare token, no quotes.
+
 `next.config.ts` enables `output: "standalone"` only when *not* building on
 Vercel. Standalone mode consumes the `.nft.json` file-trace manifests that
 Vercel's build pipeline reads, so forcing it there fails the deploy with
