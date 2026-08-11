@@ -1,0 +1,27 @@
+# Deployment compose file. Dokploy can consume this directly (Compose app) or
+# build the Dockerfile on its own (Application) — see the README.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Keep the database on the mounted volume, not inside the container layer.
+      CRM_DB_PATH: /app/data/crm.db
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    volumes:
+      - crm-data:/app/data
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  crm-data:
