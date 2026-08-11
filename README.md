@@ -167,12 +167,16 @@ Framework preset, build command and output directory are all detected; nothing
 to change.
 
 **3. Set two environment variables** before the first deploy (Settings →
-Environment Variables), for Production, Preview and Development:
+Environment Variables), for Production, Preview and Development. These are two
+*different* values from step 1 — pasting the URL into both is an easy slip:
 
-| Name | Value |
-| --- | --- |
-| `TURSO_DATABASE_URL` | the `libsql://…` URL from step 1 |
-| `TURSO_AUTH_TOKEN` | the token from step 1 |
+| Name | Value | Looks like |
+| --- | --- | --- |
+| `TURSO_DATABASE_URL` | the URL from `turso db show --url` | `libsql://name-org.turso.io` |
+| `TURSO_AUTH_TOKEN` | the token from `turso db tokens create` | `eyJhbGciOi…` (a JWT) |
+
+The app validates both at startup and fails with a direct message if the token
+is a URL, is quoted, or otherwise is not a JWT.
 
 **4. Deploy.** The schema is created on the first request and the demo pipeline
 is seeded once — the seed re-checks inside its write transaction, so several
@@ -184,12 +188,11 @@ vars in at build time.
 Note that preview deployments share the production database unless you point
 them at a separate Turso database.
 
-**If the deploy builds but every page 500s** with
-`SERVER_ERROR: Server returned HTTP status 400`, hit `/api/health` — it returns
+**If the deploy builds but every page 500s**, hit `/api/health` — it returns
 Turso's own response body, which the libSQL client otherwise discards. A 400 on
-*every* request (rather than a 401) almost always means the auth token is wrong,
-expired, or was saved with surrounding quotes. Re-issue it with
-`turso db tokens create <db>` and paste the bare token, no quotes.
+*every* request (rather than a 401) means the credential is malformed rather
+than rejected; `JWT error: Base64 error: Invalid symbol 58, offset 6` is the URL
+sitting in `TURSO_AUTH_TOKEN` (symbol 58 is the `:` in `libsql:`).
 
 `next.config.ts` enables `output: "standalone"` only when *not* building on
 Vercel. Standalone mode consumes the `.nft.json` file-trace manifests that

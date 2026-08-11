@@ -130,11 +130,29 @@ function clientConfig() {
         `TURSO_DATABASE_URL must start with libsql:// or https:// — got "${url.slice(0, 24)}…"`,
       );
     }
+    const authToken = readEnv("TURSO_AUTH_TOKEN");
+
+    // Easy to paste the URL into both variables. Turso then tries to base64
+    // decode "libsql://…" as a JWT and fails on the colon at offset 6, which
+    // surfaces as a plain 400 on every request rather than an auth error.
+    if (authToken && /^(libsql|https?):\/\//.test(authToken)) {
+      throw new Error(
+        "TURSO_AUTH_TOKEN holds a database URL, not a token. It should be the JWT " +
+          'printed by `turso db tokens create <db>` (it starts with "eyJ").',
+      );
+    }
+    if (authToken && !authToken.startsWith("eyJ")) {
+      throw new Error(
+        'TURSO_AUTH_TOKEN does not look like a Turso token — those are JWTs starting with "eyJ". ' +
+          "Re-issue it with `turso db tokens create <db>`.",
+      );
+    }
+
     return {
       // A trailing slash makes the client resolve its endpoint paths against a
       // directory-style base and request the wrong path.
       url: url.replace(/\/+$/, ""),
-      authToken: readEnv("TURSO_AUTH_TOKEN"),
+      authToken,
       // The client types this as the loose `Function`; keep our own signature.
       fetch: diagnosticFetch as unknown as (...args: never[]) => unknown,
     };
