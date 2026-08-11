@@ -119,17 +119,50 @@ async function withLockRetry<T>(operation: () => Promise<T>, attempts = 5): Prom
   throw lastError;
 }
 
+/**
+ * The schema as individual statements.
+ *
+ * Deliberately not run through `executeMultiple`: over HTTP that packs "open
+ * stream → sequence → close stream" into a single pipelined request, which
+ * Turso rejected with a bare `HTTP 400`. `batch` is the ordinary remote path —
+ * one request, one transaction, one statement per entry.
+ */
+const SCHEMA_STATEMENTS = SCHEMA.split(";")
+  .map((statement) => statement.trim())
+  .filter(Boolean);
+
+/** libSQL errors stringify to almost nothing; dig out what the server said. */
+function describeDbError(error: unknown): string {
+  const parts: string[] = [];
+  if (error instanceof Error) parts.push(error.message);
+  const code = (error as { code?: string } | null)?.code;
+  if (code) parts.push(`code=${code}`);
+  const cause = (error as { cause?: unknown } | null)?.cause;
+  if (cause instanceof Error && cause.message) parts.push(`cause=${cause.message}`);
+  return parts.join(" | ") || String(error);
+}
+
 async function connect(): Promise<Client> {
   const config = clientConfig();
+  const isFile = config.url.startsWith("file:");
   const client = createClient(config);
 
-  if (config.url.startsWith("file:")) {
+  if (isFile) {
     // Wait for the write lock rather than failing instantly. Turso applies its
     // own server-side queueing, so this is only needed in file mode.
     await client.execute("PRAGMA busy_timeout = 5000");
   }
 
-  await withLockRetry(() => client.executeMultiple(SCHEMA));
+  try {
+    await withLockRetry(() => client.batch(SCHEMA_STATEMENTS, "write"));
+  } catch (error) {
+    client.close();
+    throw new Error(
+      `Schema bootstrap failed against ${isFile ? "the local SQLite file" : "Turso"}: ${describeDbError(error)}`,
+      { cause: error },
+    );
+  }
+
   return client;
 }
 
