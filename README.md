@@ -184,6 +184,11 @@ vars in at build time.
 Note that preview deployments share the production database unless you point
 them at a separate Turso database.
 
+`next.config.ts` enables `output: "standalone"` only when *not* building on
+Vercel. Standalone mode consumes the `.nft.json` file-trace manifests that
+Vercel's build pipeline reads, so forcing it there fails the deploy with
+`ENOENT: … .next/next-server.js.nft.json`.
+
 ### Self-hosting (Docker / Dokploy / Coolify)
 
 The `Dockerfile` and `docker-compose.yml` run the app against a SQLite file on a
