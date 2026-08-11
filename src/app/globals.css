@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/*
+ * Single committed dark theme. The board is a dense, data-heavy surface, so the
+ * palette stays low-contrast in the background and saves saturation for the
+ * things that carry meaning: stage accents, priority, and money.
+ */
+
+@theme {
+  --color-canvas: #0b1020;
+  --color-surface: #121a2f;
+  --color-surface-2: #172038;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1100px 600px at 12% -8%, rgba(99, 102, 241, 0.16), transparent 60%),
+    radial-gradient(900px 520px at 88% 0%, rgba(16, 185, 129, 0.1), transparent 55%),
+    #0b1020;
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Slim scrollbars — the board has a lot of them. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.28) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.28);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.45);
+}
+
+/*
+ * Dropdown chevron. Lives here rather than in a Tailwind arbitrary value —
+ * `bg-[url(...)]` silently drops any value containing spaces, so the data URI
+ * never made it into the stylesheet.
+ */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2394a3b8'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 20px 20px;
+}
+
+/* Native date inputs render a near-invisible icon on a dark surface. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.75);
+  cursor: pointer;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-overlay-in {
+  animation: overlay-in 140ms ease-out;
+}
+
+.animate-panel-in {
+  animation: panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-overlay-in,
+  .animate-panel-in {
+    animation: none;
+  }
+}
