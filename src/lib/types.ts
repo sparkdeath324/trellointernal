@@ -112,16 +112,16 @@ export const DEAL_SOURCES: { value: DealSource; label: string }[] = [
 export const DEAL_PRIORITIES: {
   value: DealPriority;
   label: string;
-  /** Tailwind classes for the priority pill. */
+  /** Tailwind classes for the priority pill — urgency reads as redness. */
   className: string;
 }[] = [
-  { value: "low", label: "Low", className: "bg-slate-700/60 text-slate-300" },
-  { value: "medium", label: "Medium", className: "bg-sky-500/15 text-sky-300" },
-  { value: "high", label: "High", className: "bg-amber-500/15 text-amber-300" },
+  { value: "low", label: "Low", className: "bg-white/8 text-white/45" },
+  { value: "medium", label: "Medium", className: "bg-white/12 text-white/75" },
+  { value: "high", label: "High", className: "bg-red/15 text-red-bright" },
   {
     value: "critical",
     label: "Critical",
-    className: "bg-rose-500/15 text-rose-300",
+    className: "bg-red text-white",
   },
 ];
 
@@ -132,35 +132,51 @@ export const STAGE_OUTCOMES: { value: StageOutcome; label: string }[] = [
 ];
 
 export type StageColor =
-  | "slate"
-  | "indigo"
-  | "violet"
-  | "sky"
-  | "amber"
-  | "emerald"
-  | "rose";
+  | "white"
+  | "silver"
+  | "ash"
+  | "rose"
+  | "red"
+  | "crimson";
 
 export const STAGE_COLORS: { value: StageColor; label: string; dot: string }[] =
   [
-    { value: "slate", label: "Slate", dot: "bg-slate-400" },
-    { value: "sky", label: "Sky", dot: "bg-sky-400" },
-    { value: "indigo", label: "Indigo", dot: "bg-indigo-400" },
-    { value: "violet", label: "Violet", dot: "bg-violet-400" },
-    { value: "amber", label: "Amber", dot: "bg-amber-400" },
-    { value: "emerald", label: "Emerald", dot: "bg-emerald-400" },
-    { value: "rose", label: "Rose", dot: "bg-rose-400" },
+    { value: "white", label: "White", dot: "bg-white" },
+    { value: "silver", label: "Silver", dot: "bg-white/60" },
+    { value: "ash", label: "Ash", dot: "bg-white/30" },
+    { value: "rose", label: "Muted red", dot: "bg-red/50" },
+    { value: "red", label: "Red", dot: "bg-red" },
+    { value: "crimson", label: "Deep red", dot: "bg-red-deep" },
   ];
 
 /** Accent classes per stage colour, used by the column header. */
 export const STAGE_ACCENT: Record<StageColor, { bar: string; text: string }> = {
-  slate: { bar: "bg-slate-400", text: "text-slate-300" },
-  sky: { bar: "bg-sky-400", text: "text-sky-300" },
-  indigo: { bar: "bg-indigo-400", text: "text-indigo-300" },
-  violet: { bar: "bg-violet-400", text: "text-violet-300" },
-  amber: { bar: "bg-amber-400", text: "text-amber-300" },
-  emerald: { bar: "bg-emerald-400", text: "text-emerald-300" },
-  rose: { bar: "bg-rose-400", text: "text-rose-300" },
+  white: { bar: "bg-white", text: "text-white" },
+  silver: { bar: "bg-white/60", text: "text-white/80" },
+  ash: { bar: "bg-white/30", text: "text-white/55" },
+  rose: { bar: "bg-red/50", text: "text-red-bright/80" },
+  red: { bar: "bg-red", text: "text-red-bright" },
+  crimson: { bar: "bg-red-deep", text: "text-red" },
 };
+
+/**
+ * Colour names from the pre-palette schema. Kept so a database written before
+ * the black/white/red rework still renders instead of falling through to a
+ * missing accent.
+ */
+const LEGACY_STAGE_COLORS: Record<string, StageColor> = {
+  slate: "ash",
+  sky: "silver",
+  indigo: "silver",
+  violet: "rose",
+  amber: "rose",
+  emerald: "white",
+};
+
+export function stageAccent(color: string) {
+  const resolved = (LEGACY_STAGE_COLORS[color] ?? color) as StageColor;
+  return STAGE_ACCENT[resolved] ?? STAGE_ACCENT.ash;
+}
 
 export function sourceLabel(source: DealSource): string {
   return DEAL_SOURCES.find((s) => s.value === source)?.label ?? "Other";

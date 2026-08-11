@@ -36,11 +36,59 @@ forecast follows the board.
 note is recorded per deal with a timestamp.
 
 **Filters** — Free-text search across title, company, contact, owner, notes and
-tags, plus owner / source / priority filters. Columns keep their full roll-up
-totals while filtered and show how many cards are hidden.
+tags, plus multi-select owner / source / priority menus (pick High *and*
+Critical), each option showing its deal count. Active filters appear as
+removable chips with a live "7 of 12 deals" counter. Columns keep their full
+roll-up totals while filtered and show how many cards are hidden.
 
 **Multiple boards** — Each board is an independent pipeline with its own stages
 and currency.
+
+**MCP server** — The same features are exposed to agents over MCP. See below.
+
+## MCP server
+
+`npm run mcp` starts a stdio MCP server over the same database the web app uses,
+so anything an agent changes shows up in the UI on the next request.
+
+Register it with an MCP client — for Claude Code:
+
+```bash
+claude mcp add pipeline-crm -- npm --prefix /path/to/this/repo run mcp
+```
+
+Or by config:
+
+```json
+{
+  "mcpServers": {
+    "pipeline-crm": {
+      "command": "npx",
+      "args": ["tsx", "mcp/server.mts"],
+      "cwd": "/path/to/this/repo"
+    }
+  }
+}
+```
+
+Fifteen tools, covering everything the board can do:
+
+| Tool | Purpose |
+| --- | --- |
+| `list_boards` | Every board with open pipeline, forecast and closed-won |
+| `get_board` | One board's stages (with roll-ups) and deals |
+| `create_board` | New board seeded with a six-stage pipeline |
+| `create_stage` / `update_stage` / `delete_stage` | Stage CRUD; delete can relocate its deals |
+| `reorder_stages` | Set left-to-right pipeline order |
+| `list_deals` | Filter by stage, owner, source, priority, text, value range, close date |
+| `get_deal` | One deal with its full activity history |
+| `create_deal` / `update_deal` / `delete_deal` | Deal CRUD across every CRM field |
+| `move_deal` | Move between stages — re-seeds probability and logs the transition |
+| `add_deal_note` | Append to a deal's activity timeline |
+| `pipeline_summary` | Forecast totals, per-stage breakdown, value by lead source |
+
+Deal amounts are taken and returned in whole currency units (`148000`), with a
+formatted string alongside; cents stay an internal detail.
 
 ## Stack
 
@@ -51,7 +99,8 @@ and currency.
 | Styling | Tailwind CSS v4 |
 | Drag & drop | `@dnd-kit` |
 | Storage | SQLite via `better-sqlite3` |
-| Validation | `zod` at the server-action boundary |
+| Validation | `zod` at the server-action and MCP tool boundaries |
+| Agent API | `@modelcontextprotocol/sdk` over stdio |
 
 ## Layout
 
@@ -76,7 +125,18 @@ src/
     metrics.ts   pipeline roll-ups (pure)
     format.ts    money / date / avatar helpers
     types.ts     domain types and option metadata
+mcp/
+  server.mts     MCP server over the same database
 ```
+
+## Design
+
+A single committed dark theme in black, white and red. Everything structural is
+monochrome — page, panels, cards and borders are neutral, text is white at
+varying opacity. Red is reserved for meaning: the primary action, active
+filters, urgency (priority and overdue close dates), and pipeline progression
+through the stage accents. Nothing decorative is red, which is why tags render
+as neutral outlined chips rather than coloured ones.
 
 ### Data model
 
@@ -102,5 +162,6 @@ npm run build      # production build
 npm start          # serve the production build
 npm run lint       # eslint
 npm run typecheck  # tsc --noEmit
+npm run mcp        # stdio MCP server
 npm run db:reset   # delete the local database
 ```

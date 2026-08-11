@@ -1,15 +1,26 @@
 @import "tailwindcss";
 
 /*
- * Single committed dark theme. The board is a dense, data-heavy surface, so the
- * palette stays low-contrast in the background and saves saturation for the
- * things that carry meaning: stage accents, priority, and money.
+ * Committed black / white / red theme.
+ *
+ * Everything structural is monochrome — the page, panels, cards and borders are
+ * neutral, and text is white at varying opacity. Red is reserved for meaning:
+ * the primary action, the active filter, urgency, and pipeline progression.
+ * Nothing decorative is red.
  */
 
 @theme {
-  --color-canvas: #0b1020;
-  --color-surface: #121a2f;
-  --color-surface-2: #172038;
+  --color-ink: #060606; /* page */
+  --color-panel: #0d0d0d; /* column */
+  --color-card: #161616; /* card / input */
+  --color-raise: #1f1f1f; /* hover */
+  --color-line: #282828; /* default border */
+  --color-line-strong: #3d3d3d; /* hover border */
+
+  --color-red: #e6273c;
+  --color-red-bright: #ff4256;
+  --color-red-deep: #a3172a;
+
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
@@ -28,11 +39,11 @@ body {
 }
 
 body {
+  /* A single faint red wash off the top-left, so the page isn't a flat void. */
   background:
-    radial-gradient(1100px 600px at 12% -8%, rgba(99, 102, 241, 0.16), transparent 60%),
-    radial-gradient(900px 520px at 88% 0%, rgba(16, 185, 129, 0.1), transparent 55%),
-    #0b1020;
-  color: #e2e8f0;
+    radial-gradient(1000px 520px at 10% -10%, rgba(230, 39, 60, 0.1), transparent 62%),
+    #060606;
+  color: #fff;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -40,7 +51,7 @@ body {
 /* Slim scrollbars — the board has a lot of them. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.28) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -53,12 +64,18 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, 0.28);
+  background-color: rgba(255, 255, 255, 0.18);
   border-radius: 9999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(148, 163, 184, 0.45);
+  background-color: rgba(255, 255, 255, 0.32);
+}
+
+/* Selection picks up the accent. */
+::selection {
+  background: rgba(230, 39, 60, 0.35);
+  color: #fff;
 }
 
 /*
@@ -67,7 +84,7 @@ body {
  * never made it into the stylesheet.
  */
 select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2394a3b8'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23888888'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.5rem center;
   background-size: 20px 20px;
@@ -75,8 +92,13 @@ select {
 
 /* Native date inputs render a near-invisible icon on a dark surface. */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.75);
+  filter: invert(0.8);
   cursor: pointer;
+}
+
+/* Range thumbs default to the UA accent; force them onto the palette. */
+input[type="range"] {
+  accent-color: #e6273c;
 }
 
 @keyframes overlay-in {

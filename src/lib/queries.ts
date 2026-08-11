@@ -1,5 +1,3 @@
-import "server-only";
-
 import { getDb, newId, nowIso } from "./db";
 import { seedIfEmpty } from "./seed";
 import type {
@@ -176,6 +174,20 @@ export function getBoardSnapshot(boardId: string): BoardSnapshot | null {
   };
 }
 
+export function getDeal(dealId: string): Deal | null {
+  const row = getDb().prepare("SELECT * FROM deals WHERE id = ?").get(dealId) as
+    | DealRow
+    | undefined;
+  return row ? toDeal(row) : null;
+}
+
+export function getStage(stageId: string): Stage | null {
+  const row = getDb().prepare("SELECT * FROM stages WHERE id = ?").get(stageId) as
+    | StageRow
+    | undefined;
+  return row ? toStage(row) : null;
+}
+
 export function listActivities(dealId: string): Activity[] {
   const rows = getDb()
     .prepare("SELECT * FROM activities WHERE deal_id = ? ORDER BY created_at DESC, rowid DESC")
@@ -203,12 +215,12 @@ const DEFAULT_STAGES: {
   outcome: StageOutcome;
   color: StageColor;
 }[] = [
-  { name: "Lead In", probability: 10, outcome: "open", color: "slate" },
-  { name: "Qualified", probability: 30, outcome: "open", color: "sky" },
-  { name: "Proposal", probability: 60, outcome: "open", color: "violet" },
-  { name: "Negotiation", probability: 80, outcome: "open", color: "amber" },
-  { name: "Closed Won", probability: 100, outcome: "won", color: "emerald" },
-  { name: "Closed Lost", probability: 0, outcome: "lost", color: "rose" },
+  { name: "Lead In", probability: 10, outcome: "open", color: "ash" },
+  { name: "Qualified", probability: 30, outcome: "open", color: "silver" },
+  { name: "Proposal", probability: 60, outcome: "open", color: "crimson" },
+  { name: "Negotiation", probability: 80, outcome: "open", color: "red" },
+  { name: "Closed Won", probability: 100, outcome: "won", color: "white" },
+  { name: "Closed Lost", probability: 0, outcome: "lost", color: "crimson" },
 ];
 
 export function createBoard(input: {

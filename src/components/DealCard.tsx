@@ -12,9 +12,9 @@ import {
 import { priorityMeta, sourceLabel, type Deal } from "@/lib/types";
 
 const CLOSE_TONE: Record<string, string> = {
-  ok: "bg-slate-800 text-slate-400",
-  soon: "bg-amber-500/15 text-amber-300",
-  late: "bg-rose-500/15 text-rose-300",
+  ok: "bg-white/10 text-white/55",
+  soon: "bg-red/12 text-red-bright/90",
+  late: "bg-red/15 text-red-bright",
 };
 
 /** The card face. Kept separate so the drag overlay can reuse it verbatim. */
@@ -30,14 +30,14 @@ export function DealCardFace({
 
   return (
     <article
-      className={`rounded-xl border bg-slate-900/90 p-3 text-left transition ${
+      className={`rounded-xl border bg-card p-3 text-left transition ${
         dragging
-          ? "border-indigo-400/70 shadow-xl shadow-indigo-950/50"
-          : "border-slate-700/70 hover:border-slate-600"
+          ? "border-red/70 shadow-xl shadow-black/80"
+          : "border-line hover:border-line-strong"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-medium leading-snug text-slate-100">
+        <h3 className="text-sm font-medium leading-snug text-white">
           {deal.title}
         </h3>
         <span
@@ -48,29 +48,29 @@ export function DealCardFace({
       </div>
 
       {deal.company ? (
-        <p className="mt-1 truncate text-xs text-slate-400">{deal.company}</p>
+        <p className="mt-1 truncate text-xs text-white/55">{deal.company}</p>
       ) : null}
 
       <div className="mt-3 flex items-baseline justify-between gap-2">
-        <span className="font-mono text-base font-semibold tracking-tight text-emerald-300">
+        <span className="font-mono text-base font-semibold tracking-tight text-white">
           {formatMoney(deal.valueCents, deal.currency)}
         </span>
-        <span className="text-[11px] text-slate-500">{deal.probability}%</span>
+        <span className="text-[11px] text-white/40">{deal.probability}%</span>
       </div>
 
       <div
-        className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-800"
+        className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10"
         role="img"
         aria-label={`${deal.probability}% win probability`}
       >
         <div
-          className="h-full rounded-full bg-indigo-400/80"
+          className="h-full rounded-full bg-red"
           style={{ width: `${deal.probability}%` }}
         />
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <span className="rounded-md bg-slate-800/80 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+        <span className="rounded-md bg-white/8 px-2 py-0.5 text-[10px] font-medium text-white/55">
           {sourceLabel(deal.source)}
         </span>
         {close ? (
@@ -83,18 +83,18 @@ export function DealCardFace({
         {deal.tags.slice(0, 2).map((tag) => (
           <span
             key={tag}
-            className="rounded-md bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300"
+            className="rounded-md border border-white/10 px-2 py-0.5 text-[10px] font-medium text-white/60"
           >
             {tag}
           </span>
         ))}
         {deal.tags.length > 2 ? (
-          <span className="text-[10px] text-slate-500">+{deal.tags.length - 2}</span>
+          <span className="text-[10px] text-white/40">+{deal.tags.length - 2}</span>
         ) : null}
       </div>
 
       {deal.owner ? (
-        <div className="mt-3 flex items-center gap-2 border-t border-slate-800 pt-2.5">
+        <div className="mt-3 flex items-center gap-2 border-t border-line pt-2.5">
           <span
             className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold ${avatarTint(
               deal.owner,
@@ -103,7 +103,7 @@ export function DealCardFace({
           >
             {initials(deal.owner)}
           </span>
-          <span className="truncate text-[11px] text-slate-400">{deal.owner}</span>
+          <span className="truncate text-[11px] text-white/55">{deal.owner}</span>
         </div>
       ) : null}
     </article>
@@ -145,7 +145,7 @@ export default function SortableDealCard({
           }
           sortableKeyDown?.(event);
         }}
-        className="block w-full cursor-grab touch-none rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 active:cursor-grabbing"
+        className="block w-full cursor-grab touch-none rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-red active:cursor-grabbing"
       >
         <DealCardFace deal={deal} />
       </div>

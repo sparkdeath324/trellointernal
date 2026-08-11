@@ -18,11 +18,8 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import DealDialog from "./DealDialog";
 import StageColumn from "./StageColumn";
 import StageDialog from "./StageDialog";
-import PipelineHeader, {
-  EMPTY_FILTERS,
-  filtersActive,
-  type Filters,
-} from "./PipelineHeader";
+import PipelineHeader from "./PipelineHeader";
+import { EMPTY_FILTERS, filtersActive, type Filters } from "./FilterBar";
 import { DealCardFace } from "./DealCard";
 import { Modal } from "./ui";
 import { moveDealAction } from "@/app/actions";
@@ -112,9 +109,11 @@ function relocate(
 }
 
 function matchesFilters(deal: Deal, filters: Filters): boolean {
-  if (filters.owner && deal.owner !== filters.owner) return false;
-  if (filters.source && deal.source !== filters.source) return false;
-  if (filters.priority && deal.priority !== filters.priority) return false;
+  if (filters.owners.length && !filters.owners.includes(deal.owner)) return false;
+  if (filters.sources.length && !filters.sources.includes(deal.source)) return false;
+  if (filters.priorities.length && !filters.priorities.includes(deal.priority)) {
+    return false;
+  }
   if (filters.query) {
     const needle = filters.query.toLowerCase();
     const haystack = [
@@ -185,6 +184,27 @@ export default function BoardView({
   const allDeals = useMemo(() => Object.values(columns).flat(), [columns]);
   const metrics = useMemo(() => pipelineMetrics(stages, allDeals), [stages, allDeals]);
   const isFiltered = filtersActive(filters);
+
+  const visibleCount = useMemo(
+    () =>
+      isFiltered
+        ? allDeals.filter((deal) => matchesFilters(deal, filters)).length
+        : allDeals.length,
+    [allDeals, filters, isFiltered],
+  );
+
+  // Per-option deal counts shown beside each choice in the filter menus.
+  const filterCounts = useMemo(() => {
+    const owner: Record<string, number> = {};
+    const source: Record<string, number> = {};
+    const priority: Record<string, number> = {};
+    for (const deal of allDeals) {
+      if (deal.owner) owner[deal.owner] = (owner[deal.owner] ?? 0) + 1;
+      source[deal.source] = (source[deal.source] ?? 0) + 1;
+      priority[deal.priority] = (priority[deal.priority] ?? 0) + 1;
+    }
+    return { owner, source, priority };
+  }, [allDeals]);
 
   const sensors = useSensors(
     // A small drag threshold keeps plain clicks (open the deal) working.
@@ -294,6 +314,9 @@ export default function BoardView({
         metrics={metrics}
         filters={filters}
         onFiltersChange={setFilters}
+        filterCounts={filterCounts}
+        visibleCount={visibleCount}
+        totalCount={allDeals.length}
         onAddStage={() => setStageDialog({ mode: "create" })}
         onAddDeal={() => {
           const first = stages[0];
@@ -337,7 +360,7 @@ export default function BoardView({
           <button
             type="button"
             onClick={() => setStageDialog({ mode: "create" })}
-            className="h-11 w-[220px] shrink-0 rounded-2xl border border-dashed border-slate-800 text-sm font-medium text-slate-600 transition hover:border-slate-600 hover:text-slate-300"
+            className="h-11 w-[220px] shrink-0 rounded-2xl border border-dashed border-line text-sm font-medium text-white/30 transition hover:border-line-strong hover:text-white/80"
           >
             + Add stage
           </button>

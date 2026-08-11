@@ -281,8 +281,8 @@ export default function DealDialog({
       </div>
 
       {/* --- Commercials --- */}
-      <fieldset className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-        <legend className="px-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <fieldset className="rounded-xl border border-line bg-black/30 p-4">
+        <legend className="px-1.5 text-[11px] font-semibold uppercase tracking-wide text-white/55">
           Deal size &amp; forecast
         </legend>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -332,7 +332,7 @@ export default function DealDialog({
               step={5}
               value={form.probability}
               onChange={(e) => set("probability", Number(e.target.value))}
-              className="mt-2 w-full accent-indigo-400"
+              className="mt-2 w-full accent-red"
             />
           </Field>
 
@@ -346,20 +346,20 @@ export default function DealDialog({
           </Field>
         </div>
 
-        <p className="mt-3 border-t border-slate-800 pt-3 text-xs text-slate-400">
+        <p className="mt-3 border-t border-line pt-3 text-xs text-white/55">
           Weighted value{" "}
-          <span className="font-mono font-semibold text-indigo-300">
+          <span className="font-mono font-semibold text-red-bright">
             {formatMoney(weightedCents, currency)}
           </span>{" "}
-          <span className="text-slate-600">
+          <span className="text-white/30">
             ({formatMoney(valueCents, currency)} × {form.probability}%)
           </span>
         </p>
       </fieldset>
 
       {/* --- Contact --- */}
-      <fieldset className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-        <legend className="px-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <fieldset className="rounded-xl border border-line bg-black/30 p-4">
+        <legend className="px-1.5 text-[11px] font-semibold uppercase tracking-wide text-white/55">
           Primary contact
         </legend>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -422,7 +422,7 @@ export default function DealDialog({
           {tagChips.map((tag) => (
             <span
               key={tag}
-              className="rounded-md bg-indigo-500/10 px-2 py-0.5 text-[11px] font-medium text-indigo-300"
+              className="rounded-md border border-white/10 px-2 py-0.5 text-[11px] font-medium text-white/60"
             >
               {tag}
             </span>
@@ -442,8 +442,8 @@ export default function DealDialog({
 
       {/* --- Activity --- */}
       {isEdit ? (
-        <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <section className="rounded-xl border border-line bg-black/30 p-4">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
             Activity
           </h3>
 
@@ -476,26 +476,26 @@ export default function DealDialog({
               <li key={activity.id} className="flex gap-3 text-xs">
                 <span
                   className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
-                    activity.kind === "note" ? "bg-indigo-400" : "bg-slate-600"
+                    activity.kind === "note" ? "bg-red" : "bg-white/30"
                   }`}
                   aria-hidden
                 />
                 <div className="min-w-0">
-                  <p className="text-slate-300">{activity.message}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-600">
+                  <p className="text-white/75">{activity.message}</p>
+                  <p className="mt-0.5 text-[11px] text-white/30">
                     {activity.actor} · {formatTimestamp(activity.createdAt)}
                   </p>
                 </div>
               </li>
             ))}
             {activities.length === 0 ? (
-              <li className="text-xs text-slate-600">No activity yet.</li>
+              <li className="text-xs text-white/30">No activity yet.</li>
             ) : null}
           </ol>
         </section>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-800 pt-4">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
         {isEdit ? (
           <Button
             type="button"

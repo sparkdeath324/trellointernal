@@ -15,13 +15,13 @@ interface StageSeed {
 }
 
 const STAGE_SEEDS: StageSeed[] = [
-  { name: "Lead In", probability: 10, outcome: "open", color: "slate", wipLimit: null },
-  { name: "Qualified", probability: 25, outcome: "open", color: "sky", wipLimit: 8 },
-  { name: "Discovery", probability: 40, outcome: "open", color: "indigo", wipLimit: 6 },
-  { name: "Proposal", probability: 60, outcome: "open", color: "violet", wipLimit: null },
-  { name: "Negotiation", probability: 80, outcome: "open", color: "amber", wipLimit: null },
-  { name: "Closed Won", probability: 100, outcome: "won", color: "emerald", wipLimit: null },
-  { name: "Closed Lost", probability: 0, outcome: "lost", color: "rose", wipLimit: null },
+  { name: "Lead In", probability: 10, outcome: "open", color: "ash", wipLimit: null },
+  { name: "Qualified", probability: 25, outcome: "open", color: "silver", wipLimit: 8 },
+  { name: "Discovery", probability: 40, outcome: "open", color: "silver", wipLimit: 6 },
+  { name: "Proposal", probability: 60, outcome: "open", color: "crimson", wipLimit: null },
+  { name: "Negotiation", probability: 80, outcome: "open", color: "red", wipLimit: null },
+  { name: "Closed Won", probability: 100, outcome: "won", color: "white", wipLimit: null },
+  { name: "Closed Lost", probability: 0, outcome: "lost", color: "crimson", wipLimit: null },
 ];
 
 interface DealSeed {

@@ -116,12 +116,12 @@ export function initials(name: string): string {
 
 /** Deterministic avatar tint so the same owner keeps the same colour. */
 const AVATAR_TINTS = [
-  "bg-indigo-500/20 text-indigo-200",
-  "bg-emerald-500/20 text-emerald-200",
-  "bg-amber-500/20 text-amber-200",
-  "bg-sky-500/20 text-sky-200",
-  "bg-violet-500/20 text-violet-200",
-  "bg-rose-500/20 text-rose-200",
+  "bg-red/20 text-red-bright",
+  "bg-white/15 text-white",
+  "bg-red/15 text-red-bright",
+  "bg-white/12 text-white/85",
+  "bg-red-deep/35 text-red-bright",
+  "bg-red/20 text-red-bright",
 ];
 
 export function avatarTint(name: string): string {

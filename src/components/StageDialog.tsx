@@ -33,7 +33,7 @@ export default function StageDialog({
   const [name, setName] = useState(stage?.name ?? "");
   const [probability, setProbability] = useState(stage?.defaultProbability ?? 20);
   const [outcome, setOutcome] = useState<StageOutcome>(stage?.outcome ?? "open");
-  const [color, setColor] = useState<StageColor>(stage?.color ?? "slate");
+  const [color, setColor] = useState<StageColor>(stage?.color ?? "ash");
   const [wipLimit, setWipLimit] = useState(
     stage?.wipLimit !== null && stage?.wipLimit !== undefined ? String(stage.wipLimit) : "",
   );
@@ -135,7 +135,7 @@ export default function StageDialog({
             step={5}
             value={probability}
             onChange={(e) => setProbability(Number(e.target.value))}
-            className="mt-2 w-full accent-indigo-400"
+            className="mt-2 w-full accent-red"
           />
         </Field>
 
@@ -161,8 +161,8 @@ export default function StageDialog({
               aria-pressed={color === option.value}
               className={`flex h-8 w-8 items-center justify-center rounded-lg border transition ${
                 color === option.value
-                  ? "border-indigo-400 bg-slate-800"
-                  : "border-slate-700 hover:border-slate-600"
+                  ? "border-red bg-white/10"
+                  : "border-line hover:border-line-strong"
               }`}
             >
               <span className={`h-3 w-3 rounded-full ${option.dot}`} />
@@ -189,7 +189,7 @@ export default function StageDialog({
         </Field>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-800 pt-4">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
         {stage && allStages.length > 1 ? (
           <Button
             type="button"

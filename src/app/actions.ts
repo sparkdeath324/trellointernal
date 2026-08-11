@@ -29,13 +29,12 @@ const sourceSchema = z.enum([
 const prioritySchema = z.enum(["low", "medium", "high", "critical"]);
 const outcomeSchema = z.enum(["open", "won", "lost"]);
 const colorSchema = z.enum([
-  "slate",
-  "sky",
-  "indigo",
-  "violet",
-  "amber",
-  "emerald",
+  "white",
+  "silver",
+  "ash",
   "rose",
+  "red",
+  "crimson",
 ]);
 
 const isoDateSchema = z
